@@ -1,90 +1,90 @@
 # sensus
 
-Una biblioteca personal de palabras para guardar consultas, descubrir sus matices y volver a ellas después.
+A personal word library for saving queries, discovering their nuances, and coming back to them later.
 
 ## Features
 
-- Onboarding con un `@nickname` único como identificador de la biblioteca.
-- Código de recuperación para volver a acceder al perfil.
-- Home editorial con modos claro, oscuro y sistema.
-- Textura de papel y tipografía serif estilo libro de ciencia ficción.
-- Guardado local primero: las palabras se conservan aunque no haya conexión.
-- Cola automática y reintento manual cuando vuelve internet.
-- Hasta 3 definiciones concisas por palabra, siempre con ejemplo de uso.
-- Procesamiento asíncrono con OpenAI `gpt-4o-mini`.
-- Biblioteca ordenada por fecha, estados de procesamiento y eliminación.
-- Búsqueda textual en palabras, categorías, definiciones y ejemplos.
-- Sin autenticación tradicional: access key y código de recuperación asociados al nickname.
+- Onboarding with a unique `@nickname` as the library identifier.
+- Recovery code for accessing the profile again.
+- Editorial home screen with light, dark, and system themes.
+- Paper texture and a science-fiction-book-inspired serif typeface.
+- Local-first storage: words remain available without an internet connection.
+- Automatic queue delivery and manual retry when connectivity returns.
+- Up to 3 concise definitions per word, always with a usage example.
+- Asynchronous processing with OpenAI `gpt-4o-mini`.
+- Library ordered by date, processing status, and deletion controls.
+- Text search across words, categories, definitions, and examples.
+- No traditional authentication: an access key and recovery code are associated with the nickname.
 
 ## Stack
 
 - Expo SDK 57 + Expo Router
-- Expo Web para el cliente desplegado
-- NativeWind/Tailwind para la base de estilos
-- Convex para base de datos, queries y mutaciones
-- Convex Workpool para jobs en segundo plano
+- Expo Web for the deployed client
+- NativeWind/Tailwind for the styling foundation
+- Convex for the database, queries, and mutations
+- Convex Workpool for background jobs
 - OpenAI `gpt-4o-mini`
-- `localStorage` en web; SQLite + SecureStore en iOS
+- `localStorage` on web; SQLite + SecureStore on iOS
 
-## Requisitos
+## Requirements
 
 - Node.js 20+
 - npm
-- Una cuenta de Convex para un deployment hospedado
-- Una API key de OpenAI
-- Vercel CLI solo si se quiere desplegar desde terminal
+- A Convex account for a hosted deployment
+- An OpenAI API key
+- Vercel CLI if you want to deploy from the terminal
 
-## Instalación local
+## Local installation
 
 ```bash
 npm install
 cp .env.example .env.local
 ```
 
-Configura en `.env.local`:
+Configure `.env.local`:
 
 ```bash
-EXPO_PUBLIC_CONVEX_URL=https://TU_DEPLOYMENT.convex.cloud
-EXPO_PUBLIC_CONVEX_SITE_URL=https://TU_DEPLOYMENT.convex.site
+EXPO_PUBLIC_CONVEX_URL=https://YOUR_DEPLOYMENT.convex.cloud
+EXPO_PUBLIC_CONVEX_SITE_URL=https://YOUR_DEPLOYMENT.convex.site
 ```
 
-La variable `OPENAI_API_KEY` debe vivir únicamente como variable de entorno del deployment de Convex; nunca en `.env.local` versionado ni en el cliente.
+The `OPENAI_API_KEY` variable must only exist as an environment variable on the Convex deployment; never commit it to `.env.local` or expose it to the client.
 
-Arranca el backend y el cliente en terminales separadas:
+Start the backend and client in separate terminals:
 
 ```bash
 npx convex dev
 npm run web
 ```
 
-Para generar el sitio estático:
+To generate the static site:
 
 ```bash
 npm run export:web
 ```
 
-## Deployment de Convex
+## Convex deployment
 
 ```bash
 npx convex login
 npx convex deploy
-npx convex env set OPENAI_API_KEY "tu-api-key"
+npx convex env set OPENAI_API_KEY "your-api-key"
 ```
 
-Usa la URL `*.convex.cloud` resultante como `EXPO_PUBLIC_CONVEX_URL`.
+Use the resulting `*.convex.cloud` URL as `EXPO_PUBLIC_CONVEX_URL`.
 
-## Deployment en Vercel
+## Vercel deployment
 
-El proyecto usa `vercel.json` para ejecutar `npm run vercel-build` y publicar `dist/`.
+The project uses `vercel.json` to run `npm run vercel-build` and publish `dist/`.
 
-En Vercel configura estas variables para Production, Preview y Development:
+Configure these variables in Vercel for Production, Preview, and Development:
 
 ```text
-EXPO_PUBLIC_CONVEX_URL=https://TU_DEPLOYMENT.convex.cloud
-EXPO_PUBLIC_CONVEX_SITE_URL=https://TU_DEPLOYMENT.convex.site
+EXPO_PUBLIC_CONVEX_URL=https://YOUR_DEPLOYMENT.convex.cloud
+EXPO_PUBLIC_CONVEX_SITE_URL=https://YOUR_DEPLOYMENT.convex.site
 ```
 
-Después de guardar las variables, crea un nuevo deployment. Vercel instalará las dependencias con `npm ci`, ejecutará el export web y servirá el resultado estático.
+After saving the variables, create a new deployment. Vercel will install dependencies with `npm ci`, export the web build, and serve the static output.
 
 ## Checks
 
@@ -95,10 +95,10 @@ npx expo-doctor
 npm run export:web
 ```
 
-## Arquitectura resumida
+## Architecture overview
 
-El cliente guarda inmediatamente una entrada local con estado `offline-pending`, `syncing` o `processing`. Convex crea el registro y encola el procesamiento en Workpool; la acción de OpenAI normaliza el resultado y un callback actualiza el estado final. La biblioteca se reconcilia periódicamente y al recuperar conexión.
+The client immediately stores a local entry with an `offline-pending`, `syncing`, or `processing` status. Convex creates the record and queues processing in Workpool; the OpenAI action normalizes the result and a callback updates the final status. The library reconciles periodically and whenever connectivity returns.
 
-## Nota de seguridad
+## Security note
 
-Este proyecto es personal y no usa Auth de Convex. El access key funciona como bearer credential y se guarda localmente; no debe exponerse en logs ni reutilizarse para una aplicación pública multiusuario sin añadir sesiones, rate limiting y una revisión de seguridad.
+This is a personal project and does not use Convex Auth. The access key works as a bearer credential and is stored locally; it should not be exposed in logs or reused for a public multi-user application without sessions, rate limiting, and a security review.
