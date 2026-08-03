@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -66,7 +67,7 @@ export function HomeScreen() {
           const isOpen = drawerProgress.value >= 0.99;
 
           gestureStartProgress.value = isOpen ? 1 : 0;
-          gestureActive.value = (isClosed && startsAtRightEdge) || (isOpen && startsAtLeftEdge) ? 1 : 0;
+          gestureActive.value = (isClosed && startsAtLeftEdge) || (isOpen && startsAtRightEdge) ? 1 : 0;
         })
         .onStart(() => {
           if (gestureActive.value) runOnJS(Keyboard.dismiss)();
@@ -75,15 +76,15 @@ export function HomeScreen() {
           if (!gestureActive.value) return;
 
           const drawerTravel = width + DRAWER_EXTRA_TRAVEL;
-          drawerProgress.value = clamp(gestureStartProgress.value - event.translationX / drawerTravel, 0, 1);
+          drawerProgress.value = clamp(gestureStartProgress.value + event.translationX / drawerTravel, 0, 1);
         })
         .onEnd((event) => {
           if (!gestureActive.value) return;
 
           const startedClosed = gestureStartProgress.value <= 0.5;
           const shouldOpen = startedClosed
-            ? drawerProgress.value > OPEN_GESTURE_THRESHOLD || event.velocityX < -650
-            : drawerProgress.value > 1 - OPEN_GESTURE_THRESHOLD && event.velocityX < 650;
+            ? drawerProgress.value > OPEN_GESTURE_THRESHOLD || event.velocityX > 650
+            : drawerProgress.value > 1 - OPEN_GESTURE_THRESHOLD && event.velocityX > -650;
 
           drawerProgress.value = withTiming(shouldOpen ? 1 : 0, { duration: 260, easing: Easing.out(Easing.cubic) });
           runOnJS(settleDrawer)(shouldOpen);
@@ -129,10 +130,10 @@ export function HomeScreen() {
   };
 
   const mainLayerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -drawerProgress.value * width }],
+    transform: [{ translateX: drawerProgress.value * width }],
   }));
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: (1 - drawerProgress.value) * width }],
+    transform: [{ translateX: -(1 - drawerProgress.value) * width }],
   }));
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: drawerProgress.value * 0.16,
@@ -207,9 +208,19 @@ export function HomeScreen() {
 
             <Animated.View
               pointerEvents={isDrawerOpen ? "auto" : "none"}
-              style={[styles.drawer, { backgroundColor: palette.paperRaised, borderColor: palette.line, width }, drawerStyle]}
+              style={[styles.drawer, { backgroundColor: palette.paper, borderColor: palette.line, width }, drawerStyle]}
             >
-              <LibraryContent embedded onClose={closeDrawer} />
+              <View pointerEvents="none" style={styles.drawerTexture}>
+                <Image
+                  accessibilityIgnoresInvertColors
+                  resizeMode="cover"
+                  source={palette.textureImage}
+                  style={[StyleSheet.absoluteFill, { opacity: palette.textureOpacity }]}
+                />
+              </View>
+              <View style={styles.drawerContent}>
+                <LibraryContent embedded onClose={closeDrawer} />
+              </View>
             </Animated.View>
 
           </View>
@@ -236,7 +247,9 @@ const styles = StyleSheet.create({
   submitArrow: { fontSize: 34, lineHeight: 36, fontWeight: "300", marginTop: -3 },
   backdrop: { ...StyleSheet.absoluteFill },
   backdropPressable: { ...StyleSheet.absoluteFill },
-  drawer: { position: "absolute", top: 0, right: 0, bottom: 0, borderLeftWidth: 1, borderTopLeftRadius: 28, borderBottomLeftRadius: 28, overflow: "hidden" },
+  drawer: { position: "absolute", top: 0, left: 0, bottom: 0, borderRightWidth: 1, overflow: "hidden" },
+  drawerTexture: { ...StyleSheet.absoluteFill },
+  drawerContent: { flex: 1 },
   bookIcon: { width: 29, height: 23, flexDirection: "row", position: "relative" },
   bookPage: { width: 14, height: 21, position: "absolute", top: 1, borderWidth: 1.7 },
   bookPageLeft: { left: 0, borderTopLeftRadius: 7, borderBottomLeftRadius: 2, borderRightWidth: 0 },
