@@ -19,8 +19,6 @@ import { MAX_TERM_LENGTH } from "../lib/sensus";
 import { normalizeTerm, validateTerm } from "../lib/validation";
 import { LibraryContent } from "./LibraryScreen";
 
-const DRAWER_PEEK_HEIGHT = 104;
-
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -37,13 +35,13 @@ function BookIcon({ color }: { color: string }) {
 
 export function HomeScreen() {
   const { height } = useWindowDimensions();
-  const { palette, themeMode, setThemeMode, busyAction, errorMessage, noticeMessage, clearFeedback, addWord } = useSensus();
+  const { palette, themeMode, isDark, setThemeMode, busyAction, errorMessage, noticeMessage, clearFeedback, addWord } = useSensus();
   const [term, setTerm] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const drawerHeight = Math.min(Math.max(height * 0.82, 470), 760);
-  const closedOffset = Math.max(drawerHeight - DRAWER_PEEK_HEIGHT, 0);
+  const closedOffset = drawerHeight;
   const translateY = useRef(new Animated.Value(closedOffset)).current;
   const dragStart = useRef(closedOffset);
 
@@ -116,7 +114,18 @@ export function HomeScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
         <View style={styles.screen}>
           <View style={styles.topBar}>
+            <Pressable
+              accessibilityLabel="Abrir biblioteca"
+              accessibilityRole="button"
+              onPress={openDrawer}
+              style={({ pressed }) => [styles.circleButton, { borderColor: palette.line, opacity: pressed ? 0.68 : 1 }]}
+            >
+              <BookIcon color={palette.accent} />
+            </Pressable>
             <Text style={[styles.brand, { color: palette.ink }]}>sensus</Text>
+            <View style={styles.themeSelector}>
+              <ThemeSelector isDark={isDark} onChange={setThemeMode} palette={palette} value={themeMode} />
+            </View>
           </View>
 
           <View style={styles.hero}>
@@ -188,7 +197,6 @@ export function HomeScreen() {
 
           <View style={styles.drawerToolbar}>
             <Text style={[styles.drawerDescription, { color: palette.mutedInk }]}>Tus palabras, listas para volver.</Text>
-            <ThemeSelector onChange={setThemeMode} palette={palette} value={themeMode} />
           </View>
 
           <View style={styles.drawerBody}>
@@ -196,15 +204,6 @@ export function HomeScreen() {
           </View>
         </Animated.View>
 
-        <Animated.View pointerEvents={isDrawerOpen ? "none" : "auto"} style={[styles.peekBar, { backgroundColor: palette.paper, opacity: isDrawerOpen ? 0 : 1 }]}>
-          <View {...panResponder.panHandlers} style={styles.peekTouchTarget}>
-            <View style={[styles.drawerHandle, { backgroundColor: palette.line }]} />
-            <Pressable accessibilityLabel="Abrir biblioteca" accessibilityRole="button" onPress={openDrawer} style={styles.peekAction}>
-              <BookIcon color={palette.accent} />
-              <Text style={[styles.peekTitle, { color: palette.accent }]}>Biblioteca</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
       </KeyboardAvoidingView>
     </PaperSurface>
   );
@@ -213,9 +212,11 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   screen: { flex: 1, paddingHorizontal: 26 },
-  topBar: { minHeight: 84, alignItems: "center", justifyContent: "center" },
+  topBar: { minHeight: 84, alignItems: "center", justifyContent: "center", position: "relative" },
   brand: { fontSize: 18, fontWeight: "500", letterSpacing: 2.2 },
-  hero: { flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 62 },
+  circleButton: { position: "absolute", left: 0, width: 42, height: 42, borderWidth: 1, borderRadius: 99, alignItems: "center", justifyContent: "center" },
+  themeSelector: { position: "absolute", right: 0 },
+  hero: { flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 120 },
   headline: { fontFamily: "Iowan Old Style", fontSize: 36, lineHeight: 43, fontWeight: "400", letterSpacing: 0.35, textAlign: "center" },
   inputShell: { width: "100%", minHeight: 70, borderWidth: 1, borderRadius: 23, flexDirection: "row", alignItems: "center", marginTop: 31, overflow: "hidden" },
   termInput: { flex: 1, minHeight: 68, paddingHorizontal: 22, paddingVertical: 0, fontSize: 17 },
@@ -233,10 +234,6 @@ const styles = StyleSheet.create({
   drawerToolbar: { paddingHorizontal: 24, paddingBottom: 14, gap: 13 },
   drawerDescription: { fontSize: 13, lineHeight: 18 },
   drawerBody: { flex: 1 },
-  peekBar: { position: "absolute", left: 0, right: 0, bottom: 0, height: DRAWER_PEEK_HEIGHT, justifyContent: "flex-start" },
-  peekTouchTarget: { flex: 1, alignItems: "center", paddingTop: 14 },
-  peekAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, flex: 1, width: "100%" },
-  peekTitle: { fontSize: 18, letterSpacing: 0.8 },
   bookIcon: { width: 29, height: 23, flexDirection: "row", position: "relative" },
   bookPage: { width: 14, height: 21, position: "absolute", top: 1, borderWidth: 1.7 },
   bookPageLeft: { left: 0, borderTopLeftRadius: 7, borderBottomLeftRadius: 2, borderRightWidth: 0 },

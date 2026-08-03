@@ -95,33 +95,33 @@ export function GhostButton({
   );
 }
 
-export function ThemeSelector({ palette, value, onChange }: { palette: AppPalette; value: ThemeMode; onChange: (value: ThemeMode) => void }) {
-  const options: Array<{ value: ThemeMode; label: string }> = [
-    { value: "system", label: "Sistema" },
-    { value: "light", label: "Claro" },
-    { value: "dark", label: "Oscuro" },
+export function ThemeSelector({ palette, value, isDark, onChange }: { palette: AppPalette; value: ThemeMode; isDark: boolean; onChange: (value: ThemeMode) => void }) {
+  const options: Array<{ value: "light" | "dark"; label: string; icon: string }> = [
+    { value: "light", label: "Tema claro", icon: "☼" },
+    { value: "dark", label: "Tema oscuro", icon: "☾" },
   ];
 
   return (
-    <View style={styles.themeGroup}>
-      <Text style={[styles.themeLabel, { color: palette.mutedInk }]}>Apariencia</Text>
-      <View style={[styles.themeOptions, { borderColor: palette.line }]}>
-        {options.map((option) => {
-          const selected = option.value === value;
-          return (
-            <Pressable
-              accessibilityLabel={`${option.label}${selected ? ", seleccionado" : ""}`}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              key={option.value}
-              onPress={() => onChange(option.value)}
-              style={[styles.themeOption, selected && { backgroundColor: palette.accent }]}
-            >
-              <Text style={[styles.themeOptionText, { color: selected ? palette.accentInk : palette.mutedInk }]}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <View accessibilityRole="radiogroup" style={styles.themeOptions}>
+      {options.map((option) => {
+        const selected = option.value === "dark" ? value === "dark" || (value === "system" && isDark) : value === "light" || (value === "system" && !isDark);
+        return (
+          <Pressable
+            accessibilityLabel={`${option.label}${selected ? ", seleccionado" : ""}`}
+            accessibilityRole="radio"
+            accessibilityState={{ selected }}
+            key={option.value}
+            onPress={() => onChange(option.value)}
+            style={({ pressed }) => [
+              styles.themeOption,
+              { borderColor: palette.line, opacity: pressed ? 0.68 : 1 },
+              selected && { backgroundColor: palette.danger, borderColor: palette.danger },
+            ]}
+          >
+            <Text style={[styles.themeOptionText, { color: selected ? palette.accentInk : palette.mutedInk }]}>{option.icon}</Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -181,11 +181,9 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontFamily: "System", fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
   ghostButton: { minHeight: 48, borderWidth: 1, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
   ghostButtonText: { fontSize: 15, fontWeight: "600" },
-  themeGroup: { gap: 8 },
-  themeLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
-  themeOptions: { flexDirection: "row", padding: 3, borderWidth: 1, borderRadius: 13, alignSelf: "flex-start" },
-  themeOption: { minHeight: 34, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", borderRadius: 10 },
-  themeOptionText: { fontSize: 12, fontWeight: "700" },
+  themeOptions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  themeOption: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 99, borderWidth: 1 },
+  themeOptionText: { fontSize: 22, lineHeight: 25, fontWeight: "400" },
   feedback: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16 },
   feedbackText: { fontSize: 14, lineHeight: 20, fontWeight: "600" },
   statusPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 99, borderWidth: 1, alignSelf: "flex-start" },
