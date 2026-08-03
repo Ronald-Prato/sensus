@@ -67,7 +67,7 @@ function EntryCard({ entry, palette, busyAction, onRetry, onDelete }: { entry: L
   );
 }
 
-export function LibraryScreen() {
+export function LibraryContent({ embedded = false, onClose }: { embedded?: boolean; onClose?: () => void }) {
   const router = useRouter();
   const { snapshot, palette, online, busyAction, errorMessage, noticeMessage, clearFeedback, submitEntry, sendPending, deleteEntry, searchEntries } = useSensus();
   const [searchDraft, setSearchDraft] = useState("");
@@ -108,17 +108,19 @@ export function LibraryScreen() {
     setSendFeedback(false);
   };
 
-  return (
-    <PaperSurface palette={palette}>
-      <ScreenHeader onBack={() => router.back()} palette={palette} title="Biblioteca" />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Feedback error={errorMessage} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
+  const closeLibrary = onClose ?? (() => router.back());
 
+  return (
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" style={embedded ? styles.embeddedScroll : undefined}>
+      <Feedback error={errorMessage} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
+
+      {!embedded ? (
         <View style={styles.headingBlock}>
           <Text style={[styles.kicker, { color: palette.accent }]}>TU ARCHIVO</Text>
           <Text style={[styles.headline, { color: palette.ink }]}>Palabras para volver a mirar.</Text>
           <Text style={[styles.description, { color: palette.mutedInk }]}>{snapshot.entries.length ? `${snapshot.entries.length} consulta${snapshot.entries.length === 1 ? "" : "s"} guardada${snapshot.entries.length === 1 ? "" : "s"}.` : "Aquí aparecerán las palabras que quieras conservar."}</Text>
         </View>
+      ) : null}
 
         <TextInput
           accessibilityLabel="Buscar en la biblioteca"
@@ -149,16 +151,28 @@ export function LibraryScreen() {
               <Text style={[styles.emptyMark, { color: palette.accent }]}>∅</Text>
               <Text style={[styles.emptyTitle, { color: palette.ink }]}>{search ? "No hay coincidencias" : "Tu biblioteca está vacía"}</Text>
               <Text style={[styles.emptyDescription, { color: palette.mutedInk }]}>{search ? "Prueba con otra palabra o expresión." : "Empieza guardando una palabra desde el inicio."}</Text>
-              {!search ? <GhostButton onPress={() => router.back()} palette={palette} style={styles.emptyButton} title="Guardar una palabra" /> : null}
+              {!search ? <GhostButton onPress={closeLibrary} palette={palette} style={styles.emptyButton} title="Guardar una palabra" /> : null}
             </View>
           )}
         </View>
-      </ScrollView>
+    </ScrollView>
+  );
+}
+
+export function LibraryScreen() {
+  const router = useRouter();
+  const { palette } = useSensus();
+
+  return (
+    <PaperSurface palette={palette}>
+      <ScreenHeader onBack={() => router.back()} palette={palette} title="Biblioteca" />
+      <LibraryContent />
     </PaperSurface>
   );
 }
 
 const styles = StyleSheet.create({
+  embeddedScroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingBottom: 34 },
   headingBlock: { paddingTop: 19, paddingBottom: 22 },
   kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.6 },

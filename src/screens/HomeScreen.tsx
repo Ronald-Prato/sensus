@@ -1,18 +1,89 @@
-import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  KeyboardAvoidingView,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
-import { Feedback, GhostButton, PaperSurface, PrimaryButton, ThemeSelector } from "../components/Primitives";
+import { Feedback, PaperSurface, ThemeSelector } from "../components/Primitives";
 import { useSensus } from "../context/SensusProvider";
 import { MAX_TERM_LENGTH } from "../lib/sensus";
 import { normalizeTerm, validateTerm } from "../lib/validation";
+import { LibraryContent } from "./LibraryScreen";
+
+const DRAWER_PEEK_HEIGHT = 104;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function BookIcon({ color }: { color: string }) {
+  return (
+    <View accessibilityElementsHidden style={styles.bookIcon}>
+      <View style={[styles.bookPage, styles.bookPageLeft, { borderColor: color }]} />
+      <View style={[styles.bookPage, styles.bookPageRight, { borderColor: color }]} />
+      <View style={[styles.bookSpine, { backgroundColor: color }]} />
+    </View>
+  );
+}
 
 export function HomeScreen() {
-  const router = useRouter();
-  const { snapshot, palette, themeMode, setThemeMode, online, busyAction, errorMessage, noticeMessage, clearFeedback, addWord } = useSensus();
+  const { height } = useWindowDimensions();
+  const { palette, themeMode, setThemeMode, busyAction, errorMessage, noticeMessage, clearFeedback, addWord } = useSensus();
   const [term, setTerm] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const drawerHeight = Math.min(Math.max(height * 0.82, 470), 760);
+  const closedOffset = Math.max(drawerHeight - DRAWER_PEEK_HEIGHT, 0);
+  const translateY = useRef(new Animated.Value(closedOffset)).current;
+  const dragStart = useRef(closedOffset);
+
+  const animateDrawer = (open: boolean) => {
+    Animated.spring(translateY, {
+      damping: 23,
+      mass: 0.85,
+      stiffness: 190,
+      toValue: open ? 0 : closedOffset,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  useEffect(() => {
+    animateDrawer(isDrawerOpen);
+  }, [closedOffset, isDrawerOpen]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderGrant: () => {
+          translateY.stopAnimation((value) => {
+            dragStart.current = value;
+          });
+        },
+        onPanResponderMove: (_, gesture) => {
+          translateY.setValue(clamp(dragStart.current + gesture.dy, 0, closedOffset));
+        },
+        onPanResponderRelease: (_, gesture) => {
+          const position = clamp(dragStart.current + gesture.dy, 0, closedOffset);
+          const shouldOpen = gesture.vy < -0.35 || position < closedOffset / 2;
+          setIsDrawerOpen(shouldOpen);
+        },
+        onPanResponderTerminate: () => {
+          setIsDrawerOpen(dragStart.current < closedOffset / 2);
+        },
+      }),
+    [closedOffset, translateY],
+  );
 
   const submit = async () => {
     const error = validateTerm(term);
@@ -32,80 +103,108 @@ export function HomeScreen() {
     }
   };
 
-  const pendingCount = snapshot.entries.filter((entry) => entry.status === "offline-pending" || entry.status === "failed").length;
+  const openDrawer = () => {
+    setIsDrawerOpen(true);
+    clearFeedback();
+  };
+
+  const closeDrawer = () => setIsDrawerOpen(false);
+  const loading = isAdding || busyAction === "reconcile";
 
   return (
     <PaperSurface palette={palette}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <View style={styles.screen}>
           <View style={styles.topBar}>
-            <View>
-              <Text style={[styles.brand, { color: palette.ink }]}>sensus</Text>
-              <Text style={[styles.identity, { color: palette.mutedInk }]}>@{snapshot.profile?.nickname}</Text>
-            </View>
-            <View style={styles.connection}>
-              <View style={[styles.connectionDot, { backgroundColor: online ? palette.success : palette.warning }]} />
-              <Text style={[styles.connectionText, { color: palette.mutedInk }]}>{online ? "En línea" : "Sin conexión"}</Text>
-            </View>
+            <Text style={[styles.brand, { color: palette.ink }]}>sensus</Text>
           </View>
-
-          <Feedback error={errorMessage ?? formError} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
 
           <View style={styles.hero}>
-            <Text style={[styles.kicker, { color: palette.accent }]}>CONSULTA · GUARDA · VUELVE</Text>
-            <Text style={[styles.headline, { color: palette.ink }]}>Las palabras también tienen memoria.</Text>
-            <Text style={[styles.subtitle, { color: palette.mutedInk }]}>Escribe algo que quieras entender mejor.</Text>
-          </View>
+            <Text style={[styles.headline, { color: palette.ink }]}>¿QUÉ PALABRA{`\n`}QUIERES GUARDAR?</Text>
+            <View style={[styles.inputShell, { borderColor: palette.line }]}>
+              <TextInput
+                accessibilityLabel="Escribe una palabra"
+                autoCapitalize="sentences"
+                autoCorrect={false}
+                maxLength={MAX_TERM_LENGTH}
+                onChangeText={(value) => {
+                  setTerm(value.slice(0, MAX_TERM_LENGTH));
+                  setFormError(null);
+                  clearFeedback();
+                }}
+                onFocus={clearFeedback}
+                onSubmitEditing={() => void submit()}
+                placeholder="Escribe una palabra"
+                placeholderTextColor={palette.mutedInk}
+                returnKeyType="go"
+                style={[styles.termInput, { color: palette.ink }]}
+                value={term}
+              />
+              <Pressable
+                accessibilityLabel="Guardar palabra"
+                accessibilityRole="button"
+                accessibilityState={{ busy: loading, disabled: loading }}
+                disabled={loading}
+                onPress={() => void submit()}
+                style={({ pressed }) => [styles.submitButton, { borderLeftColor: palette.line, opacity: pressed || loading ? 0.58 : 1 }]}
+              >
+                {loading ? <ActivityIndicator color={palette.accent} /> : <Text style={[styles.submitArrow, { color: palette.accent }]}>→</Text>}
+              </Pressable>
+            </View>
 
-          <View style={[styles.searchCard, { backgroundColor: palette.paperRaised, borderColor: palette.line }]}>
-            <TextInput
-              accessibilityLabel="Palabra o expresión"
-              autoCapitalize="sentences"
-              autoCorrect={false}
-              maxLength={MAX_TERM_LENGTH}
-              multiline
-              onChangeText={(value) => {
-                setTerm(value.slice(0, MAX_TERM_LENGTH));
-                setFormError(null);
-                clearFeedback();
-              }}
-              onFocus={clearFeedback}
-              onSubmitEditing={() => void submit()}
-              placeholder="una palabra o expresión corta"
-              placeholderTextColor={palette.quietInk}
-              returnKeyType="search"
-              style={[styles.termInput, { color: palette.ink }]}
-              value={term}
-            />
-            <View style={styles.termFooter}>
-              <Text style={[styles.counter, { color: palette.quietInk }]}>{term.length}/{MAX_TERM_LENGTH}</Text>
-              <Text style={[styles.termHint, { color: palette.quietInk }]}>Hasta 64 caracteres</Text>
+            {errorMessage || noticeMessage || formError ? (
+              <Feedback error={errorMessage ?? formError} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
+            ) : null}
+          </View>
+        </View>
+
+        <Pressable
+          accessibilityLabel="Cerrar biblioteca"
+          accessibilityRole="button"
+          onPress={closeDrawer}
+          pointerEvents={isDrawerOpen ? "auto" : "none"}
+          style={[styles.backdrop, { backgroundColor: palette.ink, opacity: isDrawerOpen ? 0.16 : 0 }]}
+        />
+
+        <Animated.View
+          style={[
+            styles.drawer,
+            { backgroundColor: palette.paperRaised, borderColor: palette.line, height: drawerHeight },
+            { transform: [{ translateY }] },
+          ]}
+        >
+          <View {...panResponder.panHandlers} style={styles.drawerHandleZone}>
+            <View style={[styles.drawerHandle, { backgroundColor: palette.line }]} />
+            <View style={styles.drawerTitleRow}>
+              <View style={styles.drawerTitleGroup}>
+                <BookIcon color={palette.accent} />
+                <Text style={[styles.drawerTitle, { color: palette.ink }]}>Biblioteca</Text>
+              </View>
+              <Pressable accessibilityLabel="Cerrar biblioteca" accessibilityRole="button" hitSlop={10} onPress={closeDrawer} style={styles.closeButton}>
+                <Text style={[styles.closeText, { color: palette.ink }]}>×</Text>
+              </Pressable>
             </View>
           </View>
 
-          <PrimaryButton
-            accessibilityLabel="Guardar palabra en la biblioteca"
-            loading={isAdding || busyAction === "reconcile"}
-            onPress={() => void submit()}
-            palette={palette}
-            title="Guardar en mi biblioteca"
-          />
-
-          <Pressable accessibilityLabel="Abrir biblioteca" accessibilityRole="button" onPress={() => router.push("/library")} style={[styles.libraryLink, { borderBottomColor: palette.line }]}>
-            <View>
-              <Text style={[styles.libraryTitle, { color: palette.ink }]}>Biblioteca</Text>
-              <Text style={[styles.librarySubtitle, { color: palette.mutedInk }]}>
-                {pendingCount ? `${pendingCount} pendiente${pendingCount === 1 ? "" : "s"} · ` : ""}{snapshot.entries.length} registro{snapshot.entries.length === 1 ? "" : "s"}
-              </Text>
-            </View>
-            <Text style={[styles.arrow, { color: palette.accent }]}>→</Text>
-          </Pressable>
-
-          <View style={styles.footer}>
+          <View style={styles.drawerToolbar}>
+            <Text style={[styles.drawerDescription, { color: palette.mutedInk }]}>Tus palabras, listas para volver.</Text>
             <ThemeSelector onChange={setThemeMode} palette={palette} value={themeMode} />
-            <GhostButton onPress={() => router.push("/library")} palette={palette} style={styles.secondaryLibraryButton} title="Ver biblioteca" />
           </View>
-        </ScrollView>
+
+          <View style={styles.drawerBody}>
+            <LibraryContent embedded onClose={closeDrawer} />
+          </View>
+        </Animated.View>
+
+        <Animated.View pointerEvents={isDrawerOpen ? "none" : "auto"} style={[styles.peekBar, { backgroundColor: palette.paper, opacity: isDrawerOpen ? 0 : 1 }]}>
+          <View {...panResponder.panHandlers} style={styles.peekTouchTarget}>
+            <View style={[styles.drawerHandle, { backgroundColor: palette.line }]} />
+            <Pressable accessibilityLabel="Abrir biblioteca" accessibilityRole="button" onPress={openDrawer} style={styles.peekAction}>
+              <BookIcon color={palette.accent} />
+              <Text style={[styles.peekTitle, { color: palette.accent }]}>Biblioteca</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </PaperSurface>
   );
@@ -113,26 +212,34 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 28 },
-  topBar: { minHeight: 78, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  brand: { fontSize: 13, fontWeight: "800", letterSpacing: 3.1 },
-  identity: { fontSize: 12, marginTop: 5 },
-  connection: { flexDirection: "row", alignItems: "center", gap: 6 },
-  connectionDot: { width: 7, height: 7, borderRadius: 99 },
-  connectionText: { fontSize: 12, fontWeight: "600" },
-  hero: { paddingTop: 58, paddingBottom: 31 },
-  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.6 },
-  headline: { fontFamily: "Iowan Old Style", fontSize: 43, lineHeight: 48, fontWeight: "700", marginTop: 13 },
-  subtitle: { fontSize: 16, lineHeight: 23, marginTop: 17 },
-  searchCard: { minHeight: 132, borderWidth: 1, borderRadius: 20, padding: 18, marginBottom: 14 },
-  termInput: { flex: 1, minHeight: 64, fontFamily: "Iowan Old Style", fontSize: 22, lineHeight: 28, textAlign: "center", paddingVertical: 5 },
-  termFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
-  counter: { fontSize: 11, fontWeight: "700" },
-  termHint: { fontSize: 11 },
-  libraryLink: { minHeight: 76, borderBottomWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 26 },
-  libraryTitle: { fontFamily: "Iowan Old Style", fontSize: 22, fontWeight: "700" },
-  librarySubtitle: { fontSize: 13, marginTop: 5 },
-  arrow: { fontSize: 28, paddingRight: 3 },
-  footer: { gap: 24, paddingTop: 30 },
-  secondaryLibraryButton: { alignSelf: "flex-start" },
+  screen: { flex: 1, paddingHorizontal: 26 },
+  topBar: { minHeight: 84, alignItems: "center", justifyContent: "center" },
+  brand: { fontSize: 18, fontWeight: "500", letterSpacing: 2.2 },
+  hero: { flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 62 },
+  headline: { fontFamily: "Iowan Old Style", fontSize: 36, lineHeight: 43, fontWeight: "400", letterSpacing: 0.35, textAlign: "center" },
+  inputShell: { width: "100%", minHeight: 70, borderWidth: 1, borderRadius: 23, flexDirection: "row", alignItems: "center", marginTop: 31, overflow: "hidden" },
+  termInput: { flex: 1, minHeight: 68, paddingHorizontal: 22, paddingVertical: 0, fontSize: 17 },
+  submitButton: { width: 69, minHeight: 68, alignItems: "center", justifyContent: "center", borderLeftWidth: 1 },
+  submitArrow: { fontSize: 34, lineHeight: 36, fontWeight: "300", marginTop: -3 },
+  backdrop: { ...StyleSheet.absoluteFill },
+  drawer: { position: "absolute", left: 0, right: 0, bottom: 0, borderTopWidth: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
+  drawerHandleZone: { paddingTop: 13, paddingHorizontal: 24 },
+  drawerHandle: { alignSelf: "center", width: 38, height: 5, borderRadius: 99 },
+  drawerTitleRow: { minHeight: 59, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  drawerTitleGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
+  drawerTitle: { fontFamily: "Iowan Old Style", fontSize: 25, fontWeight: "700" },
+  closeButton: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
+  closeText: { fontFamily: "Iowan Old Style", fontSize: 29, lineHeight: 30, fontWeight: "300" },
+  drawerToolbar: { paddingHorizontal: 24, paddingBottom: 14, gap: 13 },
+  drawerDescription: { fontSize: 13, lineHeight: 18 },
+  drawerBody: { flex: 1 },
+  peekBar: { position: "absolute", left: 0, right: 0, bottom: 0, height: DRAWER_PEEK_HEIGHT, justifyContent: "flex-start" },
+  peekTouchTarget: { flex: 1, alignItems: "center", paddingTop: 14 },
+  peekAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, flex: 1, width: "100%" },
+  peekTitle: { fontSize: 18, letterSpacing: 0.8 },
+  bookIcon: { width: 29, height: 23, flexDirection: "row", position: "relative" },
+  bookPage: { width: 14, height: 21, position: "absolute", top: 1, borderWidth: 1.7 },
+  bookPageLeft: { left: 0, borderTopLeftRadius: 7, borderBottomLeftRadius: 2, borderRightWidth: 0 },
+  bookPageRight: { right: 0, borderTopRightRadius: 7, borderBottomRightRadius: 2, borderLeftWidth: 0 },
+  bookSpine: { position: "absolute", left: 13.5, top: 1, width: 1.5, height: 21 },
 });

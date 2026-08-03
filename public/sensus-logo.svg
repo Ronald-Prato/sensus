@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Sensus</title>
+  <desc id="desc">Círculo negro abierto por una diagonal ascendente</desc>
+  <defs>
+    <mask id="diagonal-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff" />
+      <rect x="-32" y="226" width="576" height="60" fill="#000" transform="rotate(-45 256 256)" />
+    </mask>
+  </defs>
+  <circle cx="256" cy="256" r="190" fill="#050505" mask="url(#diagonal-cut)" />
+</svg>
