@@ -17,6 +17,7 @@ import {
   createEntryId,
   createMemoryCredentialStore,
   createMemoryLocalStore,
+  DEFAULT_NICKNAME,
   EMPTY_SNAPSHOT,
   mergeLibraryEntries,
   normalizeSnapshot,
@@ -52,6 +53,7 @@ export type ActionResult = ActionSuccess | ActionFailure;
 export interface SensusContextValue {
   snapshot: LocalSnapshot;
   hydrated: boolean;
+  profileReady: boolean;
   palette: AppPalette;
   themeMode: ThemeMode;
   isDark: boolean;
@@ -138,6 +140,7 @@ export function SensusProvider({ children, services }: PropsWithChildren<{ servi
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [recoveryCodeToShow, setRecoveryCodeToShow] = useState<string | null>(null);
   const [credentialsReady, setCredentialsReady] = useState<boolean | null>(null);
+  const [profileReady, setProfileReady] = useState(false);
   const snapshotRef = useRef(snapshot);
   const reconcileInFlight = useRef<Promise<void> | null>(null);
 
@@ -162,7 +165,13 @@ export function SensusProvider({ children, services }: PropsWithChildren<{ servi
       .load()
       .then((storedSnapshot) => {
         if (!active) return;
-        const next = normalizeSnapshot(storedSnapshot);
+        const loaded = normalizeSnapshot(storedSnapshot);
+        const next = {
+          ...loaded,
+          profile: loaded.profile?.nickname === DEFAULT_NICKNAME
+            ? loaded.profile
+            : { nickname: DEFAULT_NICKNAME, createdAt: loaded.profile?.createdAt ?? Date.now() },
+        };
         snapshotRef.current = next;
         setSnapshot(next);
       })
@@ -204,6 +213,46 @@ export function SensusProvider({ children, services }: PropsWithChildren<{ servi
       active = false;
     };
   }, [resolvedServices.credentialStore, resolvedServices.remote]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let active = true;
+    const bootstrapProfile = resolvedServices.remote?.bootstrapProfile;
+
+    if (!bootstrapProfile) {
+      setProfileReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setProfileReady(false);
+    setBusyAction("profile");
+    void bootstrapProfile()
+      .then((result) => {
+        if (!active) return;
+        updateSnapshot((previous) => ({
+          ...previous,
+          profile: result.profile,
+          entries: mergeLibraryEntries(previous.entries, result.entries).filter(
+            (entry) => !previous.deletedTermKeys.includes(normalizeTermKey(entry.term)),
+          ),
+        }));
+        setCredentialsReady(true);
+      })
+      .catch(() => {
+        if (active) setNoticeMessage("No pudimos conectar con tu biblioteca; reintentaremos cuando haya conexión.");
+      })
+      .finally(() => {
+        if (!active) return;
+        setProfileReady(true);
+        setBusyAction((current) => (current === "profile" ? null : current));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hydrated, resolvedServices.remote, updateSnapshot]);
 
   const submitEntry = useCallback(
     async (entryId: string): Promise<ActionResult> => {
@@ -343,8 +392,8 @@ export function SensusProvider({ children, services }: PropsWithChildren<{ servi
   }, [reconcileWithStatus, resolvedServices.getOnlineStatus]);
 
   useEffect(() => {
-    if (hydrated) void refreshAndReconcile();
-  }, [hydrated, refreshAndReconcile]);
+    if (hydrated && profileReady) void refreshAndReconcile();
+  }, [hydrated, profileReady, refreshAndReconcile]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -354,22 +403,22 @@ export function SensusProvider({ children, services }: PropsWithChildren<{ servi
   }, [refreshAndReconcile]);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !profileReady) return;
     const subscription = Network.addNetworkStateListener((state) => {
       const nextOnline = state.isInternetReachable ?? state.isConnected ?? false;
       setOnline(nextOnline);
       if (nextOnline) void reconcileWithStatus(true);
     });
     return () => subscription.remove();
-  }, [hydrated, reconcileWithStatus]);
+  }, [hydrated, profileReady, reconcileWithStatus]);
 
   useEffect(() => {
-    if (!hydrated || !snapshot.entries.some((entry) => entry.status === "offline-pending" || entry.status === "processing" || entry.status === "syncing")) return;
+    if (!hydrated || !profileReady || !snapshot.entries.some((entry) => entry.status === "offline-pending" || entry.status === "processing" || entry.status === "syncing")) return;
     const interval = setInterval(() => {
       void refreshAndReconcile();
     }, 8_000);
     return () => clearInterval(interval);
-  }, [hydrated, refreshAndReconcile, snapshot.entries]);
+  }, [hydrated, profileReady, refreshAndReconcile, snapshot.entries]);
 
   const createProfile = useCallback(
     async (nickname: string): Promise<ActionResult> => {
@@ -573,6 +622,7 @@ export function SensusProvider({ children, services }: PropsWithChildren<{ servi
     () => ({
       snapshot,
       hydrated,
+      profileReady,
       palette,
       themeMode: snapshot.themeMode,
       isDark: snapshot.themeMode === "dark" || (snapshot.themeMode === "system" && systemScheme === "dark"),
@@ -581,7 +631,7 @@ export function SensusProvider({ children, services }: PropsWithChildren<{ servi
       errorMessage,
       noticeMessage,
       recoveryCodeToShow,
-      needsRecovery: Boolean(snapshot.profile && resolvedServices.remote?.recoverProfile && credentialsReady === false),
+      needsRecovery: false,
       createProfile,
       recoverProfile,
       addWord,

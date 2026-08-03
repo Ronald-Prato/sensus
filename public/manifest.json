@@ -1,0 +1,19 @@
+{
+  "name": "Sensus",
+  "short_name": "Sensus",
+  "description": "Una biblioteca personal de palabras.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#F7F3EC",
+  "background_color": "#F7F3EC",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

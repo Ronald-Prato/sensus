@@ -29,6 +29,39 @@ export const claim = internalMutation({
   },
 });
 
+export const bootstrap = internalMutation({
+  args: {
+    handle: v.string(),
+    accessKeyHash: v.string(),
+    recoveryCodeHash: v.string(),
+  },
+  returns: v.id("profiles"),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("profiles")
+      .withIndex("by_handle", (q) => q.eq("handle", args.handle))
+      .unique();
+
+    const now = Date.now();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        accessKeyHash: args.accessKeyHash,
+        recoveryCodeHash: args.recoveryCodeHash,
+        updatedAt: now,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("profiles", {
+      handle: args.handle,
+      accessKeyHash: args.accessKeyHash,
+      recoveryCodeHash: args.recoveryCodeHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
 export const recover = internalMutation({
   args: {
     handle: v.string(),

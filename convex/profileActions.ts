@@ -20,6 +20,8 @@ const credentialsValidator = v.object({
   recoveryCode: v.string(),
 });
 
+const DEFAULT_PROFILE_HANDLE = "@jotai";
+
 function generateAccessKey(): string {
   return randomBytes(32).toString("base64url");
 }
@@ -31,6 +33,27 @@ function generateRecoveryCode(): string {
 function hashSecret(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
+
+export const bootstrapProfile = action({
+  args: {},
+  returns: credentialsValidator,
+  handler: async (ctx) => {
+    const accessKey = assertAccessKey(generateAccessKey());
+    const recoveryCode = generateRecoveryCode();
+
+    await ctx.runMutation(internal.profiles.bootstrap, {
+      handle: DEFAULT_PROFILE_HANDLE,
+      accessKeyHash: hashSecret(accessKey),
+      recoveryCodeHash: hashSecret(recoveryCode),
+    });
+
+    return {
+      handle: DEFAULT_PROFILE_HANDLE,
+      accessKey,
+      recoveryCode,
+    };
+  },
+});
 
 export const claimProfile = action({
   args: {

@@ -5,6 +5,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
   ACCESS_KEY_KEY,
+  DEFAULT_NICKNAME,
   RECOVERY_CODE_PENDING_KEY,
   mergeLibraryEntries,
   normalizeTermKey,
@@ -127,16 +128,30 @@ async function searchAllWords(
   }
 }
 
-function mapCredentials(response: ClaimResponse, credentials: CredentialStore): Promise<void> {
+function mapCredentials(response: ClaimResponse, credentials: CredentialStore, showRecoveryCode = true): Promise<void> {
   return Promise.all([
     credentials.set(ACCESS_KEY_KEY, response.accessKey),
     credentials.set(RECOVERY_CODE_KEY, response.recoveryCode),
-    credentials.set(RECOVERY_CODE_PENDING_KEY, response.recoveryCode),
+    showRecoveryCode
+      ? credentials.set(RECOVERY_CODE_PENDING_KEY, response.recoveryCode)
+      : credentials.remove(RECOVERY_CODE_PENDING_KEY),
   ]).then(() => undefined);
 }
 
 export function createConvexRemote(client: ConvexReactClient, credentials: CredentialStore): SensusRemote {
   return {
+    async bootstrapProfile(): Promise<RecoverProfileResult> {
+      const response = await client.action(api.profileActions.bootstrapProfile, {});
+      await mapCredentials(response, credentials, false);
+      const entries = await listAllWords(client, response.handle, response.accessKey);
+      return {
+        profile: { ...profileFromHandle(response.handle), nickname: DEFAULT_NICKNAME },
+        entries,
+        accessKey: response.accessKey,
+        recoveryCode: response.recoveryCode,
+      };
+    },
+
     async registerProfile(input): Promise<RegisterProfileResult> {
       const response = await client.action(api.profileActions.claimProfile, {
         handle: toHandle(input.nickname),

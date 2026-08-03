@@ -1,11 +1,27 @@
-import { ActivityIndicator, Image, ImageBackground, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import type { ReactNode } from "react";
+import { ActivityIndicator, Image, ImageBackground, Platform, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { useEffect, type ReactNode } from "react";
 import Head from "expo-router/head";
 
 import type { AppPalette } from "../theme";
 import type { ThemeMode } from "../lib/sensus";
 
 export function PaperSurface({ children, palette }: { children: ReactNode; palette: AppPalette }) {
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+
+    const textureSource = palette.textureImage;
+    const textureUrl =
+      typeof textureSource === "object" && textureSource !== null && "uri" in textureSource && typeof textureSource.uri === "string"
+        ? textureSource.uri
+        : null;
+    if (!textureUrl) return;
+    const backgroundImage = `url("${textureUrl}")`;
+    document.documentElement.style.backgroundColor = palette.paper;
+    document.documentElement.style.backgroundImage = backgroundImage;
+    document.body.style.backgroundColor = palette.paper;
+    document.body.style.backgroundImage = backgroundImage;
+  }, [palette.paper, palette.textureImage]);
+
   return (
     <ImageBackground
       accessibilityIgnoresInvertColors
@@ -16,7 +32,6 @@ export function PaperSurface({ children, palette }: { children: ReactNode; palet
     >
       <Head>
         <meta name="theme-color" content={palette.paper} />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </Head>
       <StatusBar barStyle={palette.paper === "#121A22" ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.safe}>{children}</SafeAreaView>
@@ -177,7 +192,7 @@ export function ScreenHeader({
 }
 
 const styles = StyleSheet.create({
-  paper: { flex: 1, overflow: "hidden" },
+  paper: { flex: 1, width: "100%", height: "100%", minHeight: "100%", overflow: "hidden" },
   safe: { flex: 1, backgroundColor: "transparent" },
   textureImage: { width: "100%", height: "100%" },
   textureOverlay: { ...StyleSheet.absoluteFill, zIndex: 20 },

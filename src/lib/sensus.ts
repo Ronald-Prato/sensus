@@ -1,4 +1,5 @@
 export const MAX_TERM_LENGTH = 64;
+export const DEFAULT_NICKNAME = "jotai";
 
 export const ENTRY_STATUSES = [
   "offline-pending",
@@ -96,6 +97,7 @@ export interface ReconcileInput {
 }
 
 export interface SensusRemote {
+  bootstrapProfile?(): Promise<RecoverProfileResult>;
   registerProfile?(input: { nickname: string }): Promise<RegisterProfileResult>;
   recoverProfile?(input: {
     nickname: string;

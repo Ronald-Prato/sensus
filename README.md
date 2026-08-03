@@ -4,8 +4,7 @@ A personal word library for saving queries, discovering their nuances, and comin
 
 ## Features
 
-- Onboarding with a unique `@nickname` as the library identifier.
-- Recovery code for accessing the profile again.
+- A private fixed `@jotai` profile is bootstrapped automatically on launch.
 - Editorial home screen with light, dark, and system themes.
 - Paper texture and a science-fiction-book-inspired serif typeface.
 - Local-first storage: words remain available without an internet connection.
@@ -14,7 +13,7 @@ A personal word library for saving queries, discovering their nuances, and comin
 - Asynchronous processing with OpenAI `gpt-4o-mini`.
 - Library ordered by date, processing status, and deletion controls.
 - Text search across words, categories, definitions, and examples.
-- No traditional authentication: an access key and recovery code are associated with the nickname.
+- No interactive authentication: the personal app goes directly to the home screen.
 
 ## Stack
 
@@ -101,4 +100,4 @@ The client immediately stores a local entry with an `offline-pending`, `syncing`
 
 ## Security note
 
-This is a personal project and does not use Convex Auth. The access key works as a bearer credential and is stored locally; it should not be exposed in logs or reused for a public multi-user application without sessions, rate limiting, and a security review.
+This is a personal project and does not use Convex Auth. The published client can bootstrap the fixed `@jotai` profile and stores its rotating access key locally; do not reuse this setup for a public multi-user application without sessions, rate limiting, and a security review.

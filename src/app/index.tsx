@@ -1,12 +1,10 @@
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { HomeScreen } from "../screens/HomeScreen";
-import { RecoveryCodeScreen } from "../screens/RecoveryCodeScreen";
 import { useSensus } from "../context/SensusProvider";
 
 export default function IndexScreen() {
-  const { hydrated, snapshot, palette, recoveryCodeToShow, needsRecovery } = useSensus();
+  const { hydrated, profileReady, palette } = useSensus();
 
   if (!hydrated) {
     return (
@@ -17,8 +15,14 @@ export default function IndexScreen() {
     );
   }
 
-  if (!snapshot.profile || needsRecovery) return <OnboardingScreen initialMode={needsRecovery ? "recover" : "new"} />;
-  if (recoveryCodeToShow) return <RecoveryCodeScreen />;
+  if (!profileReady) {
+    return (
+      <View style={[styles.loading, { backgroundColor: palette.paper }]}>
+        <Text style={[styles.loadingTitle, { color: palette.ink }]}>sensus</Text>
+        <ActivityIndicator color={palette.accent} style={styles.spinner} />
+      </View>
+    );
+  }
   return <HomeScreen />;
 }
 

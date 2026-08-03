@@ -37,7 +37,7 @@ function EntryCard({ entry, palette, busyAction, onRetry, onDelete }: { entry: L
 
       {entry.status === "ready" && entry.details?.definitions.length ? (
         <View style={[styles.details, { borderTopColor: palette.line }]}>
-          {entry.details.definitions.slice(0, 3).map((definition, index) => (
+          {entry.details.definitions.slice(0, 1).map((definition, index) => (
             <View key={`${entry.id}-definition-${index}`} style={styles.definition}>
               <Text style={[styles.definitionIndex, { color: palette.accent }]}>{String(index + 1).padStart(2, "0")}</Text>
               <View style={styles.definitionCopy}>
@@ -105,6 +105,19 @@ export function LibraryContent({ embedded = false, onClose }: { embedded?: boole
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" style={embedded ? styles.embeddedScroll : undefined}>
       <Feedback error={errorMessage} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
 
+      <View style={styles.libraryHeader}>
+        <Text style={[styles.libraryTitle, { color: palette.ink }]}>Biblioteca</Text>
+        <Pressable
+          accessibilityLabel="Volver al inicio"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={closeLibrary}
+          style={({ pressed }) => [styles.homeCircleButton, { borderColor: palette.line, opacity: pressed ? 0.68 : 1 }]}
+        >
+          <Text style={[styles.homeCircleIcon, { color: palette.accent }]}>⌂</Text>
+        </Pressable>
+      </View>
+
         <TextInput
           accessibilityLabel="Buscar en la biblioteca"
           autoCapitalize="none"
@@ -144,7 +157,11 @@ export function LibraryScreen() {
 
 const styles = StyleSheet.create({
   embeddedScroll: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 34 },
+  content: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 34 },
+  libraryHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 18 },
+  libraryTitle: { fontFamily: "Iowan Old Style", fontSize: 34, lineHeight: 40, fontWeight: "700" },
+  homeCircleButton: { width: 42, height: 42, borderWidth: 1, borderRadius: 99, alignItems: "center", justifyContent: "center" },
+  homeCircleIcon: { fontFamily: "Iowan Old Style", fontSize: 24, lineHeight: 26 },
   searchInput: { minHeight: 50, borderWidth: 1, borderRadius: 15, paddingHorizontal: 15, fontSize: 15, marginBottom: 15 },
   list: { gap: 13 },
   entryCard: { borderWidth: 1, borderRadius: 18, padding: 15 },
