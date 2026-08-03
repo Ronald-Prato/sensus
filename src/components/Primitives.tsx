@@ -1,0 +1,188 @@
+import { ActivityIndicator, Image, Pressable, SafeAreaView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import type { ReactNode } from "react";
+
+import type { AppPalette } from "../theme";
+import type { ThemeMode } from "../lib/sensus";
+
+export function PaperSurface({ children, palette }: { children: ReactNode; palette: AppPalette }) {
+  return (
+    <View className="flex-1 overflow-hidden" style={[styles.paper, { backgroundColor: palette.paper }]}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Image
+          accessibilityIgnoresInvertColors
+          source={palette.textureImage}
+          style={[StyleSheet.absoluteFill, { opacity: palette.textureOpacity }]}
+        />
+      </View>
+      <SafeAreaView style={styles.safe}>{children}</SafeAreaView>
+    </View>
+  );
+}
+
+export function PrimaryButton({
+  title,
+  onPress,
+  palette,
+  loading = false,
+  disabled = false,
+  style,
+  accessibilityLabel,
+}: {
+  title: string;
+  onPress: () => void;
+  palette: AppPalette;
+  loading?: boolean;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+  accessibilityLabel?: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityRole="button"
+      accessibilityState={{ busy: loading, disabled }}
+      disabled={disabled || loading}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.primaryButton,
+        { backgroundColor: palette.accent, opacity: pressed || disabled ? 0.78 : 1 },
+        style,
+      ]}
+    >
+      {loading ? <ActivityIndicator color={palette.accentInk} /> : <Text style={[styles.primaryButtonText, { color: palette.accentInk }]}>{title}</Text>}
+    </Pressable>
+  );
+}
+
+export function GhostButton({
+  title,
+  onPress,
+  palette,
+  disabled = false,
+  style,
+}: {
+  title: string;
+  onPress: () => void;
+  palette: AppPalette;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={title}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.ghostButton,
+        { borderColor: palette.line, opacity: pressed || disabled ? 0.58 : 1 },
+        style,
+      ]}
+    >
+      <Text style={[styles.ghostButtonText, { color: palette.ink }]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+export function ThemeSelector({ palette, value, onChange }: { palette: AppPalette; value: ThemeMode; onChange: (value: ThemeMode) => void }) {
+  const options: Array<{ value: ThemeMode; label: string }> = [
+    { value: "system", label: "Sistema" },
+    { value: "light", label: "Claro" },
+    { value: "dark", label: "Oscuro" },
+  ];
+
+  return (
+    <View style={styles.themeGroup}>
+      <Text style={[styles.themeLabel, { color: palette.mutedInk }]}>Apariencia</Text>
+      <View style={[styles.themeOptions, { borderColor: palette.line }]}>
+        {options.map((option) => {
+          const selected = option.value === value;
+          return (
+            <Pressable
+              accessibilityLabel={`${option.label}${selected ? ", seleccionado" : ""}`}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              key={option.value}
+              onPress={() => onChange(option.value)}
+              style={[styles.themeOption, selected && { backgroundColor: palette.accent }]}
+            >
+              <Text style={[styles.themeOptionText, { color: selected ? palette.accentInk : palette.mutedInk }]}>{option.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+export function Feedback({ palette, error, notice, onDismiss }: { palette: AppPalette; error: string | null; notice: string | null; onDismiss: () => void }) {
+  const message = error ?? notice;
+  if (!message) return null;
+  const color = error ? palette.danger : palette.success;
+
+  return (
+    <Pressable accessibilityLabel={`${message}. Toca para cerrar.`} accessibilityRole="alert" onPress={onDismiss} style={[styles.feedback, { borderColor: color }]}>
+      <Text style={[styles.feedbackText, { color }]}>{message}</Text>
+    </Pressable>
+  );
+}
+
+export function StatusPill({ label, color, palette }: { label: string; color: string; palette: AppPalette }) {
+  return (
+    <View style={[styles.statusPill, { backgroundColor: `${color}18`, borderColor: `${color}55` }]}>
+      <View style={[styles.statusDot, { backgroundColor: color }]} />
+      <Text style={[styles.statusText, { color: palette.ink }]}>{label}</Text>
+    </View>
+  );
+}
+
+export function ScreenHeader({
+  title,
+  palette,
+  onBack,
+  trailing,
+}: {
+  title: string;
+  palette: AppPalette;
+  onBack?: () => void;
+  trailing?: ReactNode;
+}) {
+  return (
+    <View style={styles.header}>
+      {onBack ? (
+        <Pressable accessibilityLabel="Volver" accessibilityRole="button" hitSlop={12} onPress={onBack} style={styles.backButton}>
+          <Text style={[styles.backText, { color: palette.ink }]}>‹</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.backButton} />
+      )}
+      <Text style={[styles.headerTitle, { color: palette.ink }]}>{title}</Text>
+      <View style={styles.headerTrailing}>{trailing}</View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  paper: { flex: 1, overflow: "hidden" },
+  safe: { flex: 1 },
+  primaryButton: { minHeight: 54, borderRadius: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
+  primaryButtonText: { fontFamily: "System", fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
+  ghostButton: { minHeight: 48, borderWidth: 1, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  ghostButtonText: { fontSize: 15, fontWeight: "600" },
+  themeGroup: { gap: 8 },
+  themeLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
+  themeOptions: { flexDirection: "row", padding: 3, borderWidth: 1, borderRadius: 13, alignSelf: "flex-start" },
+  themeOption: { minHeight: 34, paddingHorizontal: 11, alignItems: "center", justifyContent: "center", borderRadius: 10 },
+  themeOptionText: { fontSize: 12, fontWeight: "700" },
+  feedback: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 16 },
+  feedbackText: { fontSize: 14, lineHeight: 20, fontWeight: "600" },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 99, borderWidth: 1, alignSelf: "flex-start" },
+  statusDot: { width: 6, height: 6, borderRadius: 99 },
+  statusText: { fontSize: 11, fontWeight: "700" },
+  header: { minHeight: 58, paddingHorizontal: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  backButton: { width: 32, height: 40, justifyContent: "center" },
+  backText: { fontFamily: "Iowan Old Style", fontSize: 38, lineHeight: 38 },
+  headerTitle: { fontFamily: "Iowan Old Style", fontSize: 19, fontWeight: "700", letterSpacing: 0.2 },
+  headerTrailing: { width: 32, alignItems: "flex-end" },
+});
