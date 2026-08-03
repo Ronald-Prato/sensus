@@ -2,7 +2,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 
-import { Feedback, GhostButton, PaperSurface, PrimaryButton, ScreenHeader, StatusPill } from "../components/Primitives";
+import { Feedback, GhostButton, PaperSurface, StatusPill } from "../components/Primitives";
 import { useSensus } from "../context/SensusProvider";
 import type { AppPalette } from "../theme";
 import type { EntryStatus, LibraryEntry } from "../lib/sensus";
@@ -69,11 +69,10 @@ function EntryCard({ entry, palette, busyAction, onRetry, onDelete }: { entry: L
 
 export function LibraryContent({ embedded = false, onClose }: { embedded?: boolean; onClose?: () => void }) {
   const router = useRouter();
-  const { snapshot, palette, online, busyAction, errorMessage, noticeMessage, clearFeedback, submitEntry, sendPending, deleteEntry, searchEntries } = useSensus();
+  const { snapshot, palette, busyAction, errorMessage, noticeMessage, clearFeedback, submitEntry, deleteEntry, searchEntries } = useSensus();
   const [searchDraft, setSearchDraft] = useState("");
   const [search, setSearch] = useState("");
   const [visibleEntries, setVisibleEntries] = useState<LibraryEntry[]>(snapshot.entries);
-  const [sendFeedback, setSendFeedback] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -93,8 +92,6 @@ export function LibraryContent({ embedded = false, onClose }: { embedded?: boole
   useEffect(() => {
     if (!search) setVisibleEntries(snapshot.entries);
   }, [search, snapshot.entries]);
-  const pendingEntries = snapshot.entries.filter((entry) => entry.status === "offline-pending" || entry.status === "failed" || entry.status === "not-found");
-
   const confirmDelete = (entry: LibraryEntry) => {
     Alert.alert("Eliminar consulta", `¿Quieres eliminar “${entry.term}” de tu biblioteca?`, [
       { text: "Cancelar", style: "cancel" },
@@ -102,25 +99,11 @@ export function LibraryContent({ embedded = false, onClose }: { embedded?: boole
     ]);
   };
 
-  const handleSendPending = async () => {
-    setSendFeedback(true);
-    await sendPending();
-    setSendFeedback(false);
-  };
-
   const closeLibrary = onClose ?? (() => router.back());
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" style={embedded ? styles.embeddedScroll : undefined}>
       <Feedback error={errorMessage} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
-
-      {!embedded ? (
-        <View style={styles.headingBlock}>
-          <Text style={[styles.kicker, { color: palette.accent }]}>TU ARCHIVO</Text>
-          <Text style={[styles.headline, { color: palette.ink }]}>Palabras para volver a mirar.</Text>
-          <Text style={[styles.description, { color: palette.mutedInk }]}>{snapshot.entries.length ? `${snapshot.entries.length} consulta${snapshot.entries.length === 1 ? "" : "s"} guardada${snapshot.entries.length === 1 ? "" : "s"}.` : "Aquí aparecerán las palabras que quieras conservar."}</Text>
-        </View>
-      ) : null}
 
         <TextInput
           accessibilityLabel="Buscar en la biblioteca"
@@ -133,16 +116,6 @@ export function LibraryContent({ embedded = false, onClose }: { embedded?: boole
           value={searchDraft}
         />
 
-        {pendingEntries.length ? (
-          <View style={[styles.pendingBar, { backgroundColor: palette.paperDeep, borderColor: palette.line }]}>
-            <View style={styles.pendingCopy}>
-              <Text style={[styles.pendingTitle, { color: palette.ink }]}>{online ? "Tienes consultas pendientes" : "Estás sin conexión"}</Text>
-              <Text style={[styles.pendingDescription, { color: palette.mutedInk }]}>{online ? "Puedes enviarlas ahora o esperar la próxima sincronización." : "Tus consultas siguen guardadas en el dispositivo."}</Text>
-            </View>
-            <PrimaryButton disabled={!online || sendFeedback} loading={sendFeedback || busyAction === "reconcile"} onPress={() => void handleSendPending()} palette={palette} style={styles.sendAllButton} title="Enviar" />
-          </View>
-        ) : null}
-
         <View style={styles.list}>
           {visibleEntries.length ? visibleEntries.map((entry) => (
             <EntryCard busyAction={busyAction} entry={entry} key={entry.id} onDelete={() => confirmDelete(entry)} onRetry={() => void submitEntry(entry.id)} palette={palette} />
@@ -151,21 +124,19 @@ export function LibraryContent({ embedded = false, onClose }: { embedded?: boole
               <Text style={[styles.emptyMark, { color: palette.accent }]}>∅</Text>
               <Text style={[styles.emptyTitle, { color: palette.ink }]}>{search ? "No hay coincidencias" : "Tu biblioteca está vacía"}</Text>
               <Text style={[styles.emptyDescription, { color: palette.mutedInk }]}>{search ? "Prueba con otra palabra o expresión." : "Empieza guardando una palabra desde el inicio."}</Text>
-              {!search ? <GhostButton onPress={closeLibrary} palette={palette} style={styles.emptyButton} title="Guardar una palabra" /> : null}
             </View>
           )}
         </View>
+        <GhostButton onPress={closeLibrary} palette={palette} style={styles.homeButton} title="Volver al inicio" />
     </ScrollView>
   );
 }
 
 export function LibraryScreen() {
-  const router = useRouter();
   const { palette } = useSensus();
 
   return (
     <PaperSurface palette={palette}>
-      <ScreenHeader onBack={() => router.back()} palette={palette} title="Biblioteca" />
       <LibraryContent />
     </PaperSurface>
   );
@@ -173,17 +144,8 @@ export function LibraryScreen() {
 
 const styles = StyleSheet.create({
   embeddedScroll: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingBottom: 34 },
-  headingBlock: { paddingTop: 19, paddingBottom: 22 },
-  kicker: { fontSize: 11, fontWeight: "800", letterSpacing: 1.6 },
-  headline: { fontFamily: "Iowan Old Style", fontSize: 34, lineHeight: 39, fontWeight: "700", marginTop: 10 },
-  description: { fontSize: 14, lineHeight: 20, marginTop: 12 },
+  content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 34 },
   searchInput: { minHeight: 50, borderWidth: 1, borderRadius: 15, paddingHorizontal: 15, fontSize: 15, marginBottom: 15 },
-  pendingBar: { borderWidth: 1, borderRadius: 16, padding: 13, flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 15 },
-  pendingCopy: { flex: 1 },
-  pendingTitle: { fontSize: 14, fontWeight: "800" },
-  pendingDescription: { fontSize: 12, lineHeight: 17, marginTop: 4 },
-  sendAllButton: { minHeight: 40, borderRadius: 12, paddingHorizontal: 14 },
   list: { gap: 13 },
   entryCard: { borderWidth: 1, borderRadius: 18, padding: 15 },
   entryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 },
@@ -206,5 +168,5 @@ const styles = StyleSheet.create({
   emptyMark: { fontFamily: "Iowan Old Style", fontSize: 32 },
   emptyTitle: { fontFamily: "Iowan Old Style", fontSize: 21, fontWeight: "700", marginTop: 8 },
   emptyDescription: { fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 8 },
-  emptyButton: { marginTop: 20 },
+  homeButton: { marginTop: 22 },
 });

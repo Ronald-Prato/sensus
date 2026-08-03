@@ -1,21 +1,24 @@
-import { ActivityIndicator, Image, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, Image, ImageBackground, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import type { ReactNode } from "react";
+import Head from "expo-router/head";
 
 import type { AppPalette } from "../theme";
 import type { ThemeMode } from "../lib/sensus";
 
 export function PaperSurface({ children, palette }: { children: ReactNode; palette: AppPalette }) {
   return (
-    <View className="flex-1 overflow-hidden" style={[styles.paper, { backgroundColor: palette.paper }]}>
-      <StatusBar barStyle={palette.paper === "#121A22" ? "light-content" : "dark-content"} backgroundColor={palette.paper} translucent />
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <Image
-          accessibilityIgnoresInvertColors
-          resizeMode="cover"
-          source={palette.textureImage}
-          style={[StyleSheet.absoluteFill, { opacity: palette.textureOpacity }]}
-        />
-      </View>
+    <ImageBackground
+      accessibilityIgnoresInvertColors
+      imageStyle={[styles.textureImage, { opacity: palette.textureOpacity }]}
+      resizeMode="cover"
+      source={palette.textureImage}
+      style={[styles.paper, { backgroundColor: palette.paper }]}
+    >
+      <Head>
+        <meta name="theme-color" content={palette.paper} />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </Head>
+      <StatusBar barStyle={palette.paper === "#121A22" ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.safe}>{children}</SafeAreaView>
       <View pointerEvents="none" style={styles.textureOverlay}>
         <Image
@@ -25,7 +28,7 @@ export function PaperSurface({ children, palette }: { children: ReactNode; palet
           style={[StyleSheet.absoluteFill, { opacity: Math.min(palette.textureOpacity * 0.34, 0.22) }]}
         />
       </View>
-    </View>
+    </ImageBackground>
   );
 }
 
@@ -175,7 +178,8 @@ export function ScreenHeader({
 
 const styles = StyleSheet.create({
   paper: { flex: 1, overflow: "hidden" },
-  safe: { flex: 1 },
+  safe: { flex: 1, backgroundColor: "transparent" },
+  textureImage: { width: "100%", height: "100%" },
   textureOverlay: { ...StyleSheet.absoluteFill, zIndex: 20 },
   primaryButton: { minHeight: 54, borderRadius: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 },
   primaryButtonText: { fontFamily: "System", fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },

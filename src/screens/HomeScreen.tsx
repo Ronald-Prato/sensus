@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Animated,
+  Keyboard,
   KeyboardAvoidingView,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -12,6 +11,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { Feedback, PaperSurface, ThemeSelector } from "../components/Primitives";
 import { useSensus } from "../context/SensusProvider";
@@ -19,7 +20,14 @@ import { MAX_TERM_LENGTH } from "../lib/sensus";
 import { normalizeTerm, validateTerm } from "../lib/validation";
 import { LibraryContent } from "./LibraryScreen";
 
+const EDGE_SWIPE_WIDTH = 34;
+const DRAWER_EXTRA_TRAVEL = 80;
+const OPEN_GESTURE_THRESHOLD = 0.22;
+const EDGE_SWIPE_ACTIVATION_DISTANCE = 12;
+const EDGE_SWIPE_VERTICAL_CANCEL_DISTANCE = 10;
+
 function clamp(value: number, min: number, max: number): number {
+  "worklet";
   return Math.min(Math.max(value, min), max);
 }
 
@@ -34,53 +42,60 @@ function BookIcon({ color }: { color: string }) {
 }
 
 export function HomeScreen() {
-  const { height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const { palette, themeMode, isDark, setThemeMode, busyAction, errorMessage, noticeMessage, clearFeedback, addWord } = useSensus();
   const [term, setTerm] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const drawerHeight = Math.min(Math.max(height * 0.82, 470), 760);
-  const closedOffset = drawerHeight;
-  const translateY = useRef(new Animated.Value(closedOffset)).current;
-  const dragStart = useRef(closedOffset);
+  const drawerProgress = useSharedValue(0);
+  const gestureStartProgress = useSharedValue(0);
+  const gestureActive = useSharedValue(0);
 
-  const animateDrawer = (open: boolean) => {
-    Animated.spring(translateY, {
-      damping: 23,
-      mass: 0.85,
-      stiffness: 190,
-      toValue: open ? 0 : closedOffset,
-      useNativeDriver: true,
-    }).start();
-  };
+  const settleDrawer = (open: boolean) => setIsDrawerOpen(open);
 
-  useEffect(() => {
-    animateDrawer(isDrawerOpen);
-  }, [closedOffset, isDrawerOpen]);
-
-  const panResponder = useMemo(
+  const edgeSwipeGesture = useMemo(
     () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        onPanResponderGrant: () => {
-          translateY.stopAnimation((value) => {
-            dragStart.current = value;
-          });
-        },
-        onPanResponderMove: (_, gesture) => {
-          translateY.setValue(clamp(dragStart.current + gesture.dy, 0, closedOffset));
-        },
-        onPanResponderRelease: (_, gesture) => {
-          const position = clamp(dragStart.current + gesture.dy, 0, closedOffset);
-          const shouldOpen = gesture.vy < -0.35 || position < closedOffset / 2;
-          setIsDrawerOpen(shouldOpen);
-        },
-        onPanResponderTerminate: () => {
-          setIsDrawerOpen(dragStart.current < closedOffset / 2);
-        },
-      }),
-    [closedOffset, translateY],
+      Gesture.Pan()
+        .activeOffsetX([-EDGE_SWIPE_ACTIVATION_DISTANCE, EDGE_SWIPE_ACTIVATION_DISTANCE])
+        .failOffsetY([-EDGE_SWIPE_VERTICAL_CANCEL_DISTANCE, EDGE_SWIPE_VERTICAL_CANCEL_DISTANCE])
+        .onBegin((event) => {
+          const startsAtLeftEdge = event.x <= EDGE_SWIPE_WIDTH;
+          const startsAtRightEdge = event.x >= width - EDGE_SWIPE_WIDTH;
+          const isClosed = drawerProgress.value <= 0.01;
+          const isOpen = drawerProgress.value >= 0.99;
+
+          gestureStartProgress.value = isOpen ? 1 : 0;
+          gestureActive.value = (isClosed && startsAtRightEdge) || (isOpen && startsAtLeftEdge) ? 1 : 0;
+        })
+        .onStart(() => {
+          if (gestureActive.value) runOnJS(Keyboard.dismiss)();
+        })
+        .onUpdate((event) => {
+          if (!gestureActive.value) return;
+
+          const drawerTravel = width + DRAWER_EXTRA_TRAVEL;
+          drawerProgress.value = clamp(gestureStartProgress.value - event.translationX / drawerTravel, 0, 1);
+        })
+        .onEnd((event) => {
+          if (!gestureActive.value) return;
+
+          const startedClosed = gestureStartProgress.value <= 0.5;
+          const shouldOpen = startedClosed
+            ? drawerProgress.value > OPEN_GESTURE_THRESHOLD || event.velocityX < -650
+            : drawerProgress.value > 1 - OPEN_GESTURE_THRESHOLD && event.velocityX < 650;
+
+          drawerProgress.value = withTiming(shouldOpen ? 1 : 0, { duration: 260, easing: Easing.out(Easing.cubic) });
+          runOnJS(settleDrawer)(shouldOpen);
+        })
+        .onFinalize((_, success) => {
+          const wasEdgeSwipe = gestureActive.value;
+          gestureActive.value = 0;
+          if (wasEdgeSwipe && !success) {
+            drawerProgress.value = withTiming(gestureStartProgress.value, { duration: 220, easing: Easing.out(Easing.cubic) });
+          }
+        }),
+    [drawerProgress, gestureActive, gestureStartProgress, settleDrawer, width],
   );
 
   const submit = async () => {
@@ -102,108 +117,103 @@ export function HomeScreen() {
   };
 
   const openDrawer = () => {
+    Keyboard.dismiss();
     setIsDrawerOpen(true);
+    drawerProgress.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) });
     clearFeedback();
   };
 
-  const closeDrawer = () => setIsDrawerOpen(false);
+  const closeDrawer = () => {
+    setIsDrawerOpen(false);
+    drawerProgress.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
+  };
+
+  const mainLayerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -drawerProgress.value * width }],
+  }));
+  const drawerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: (1 - drawerProgress.value) * width }],
+  }));
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: drawerProgress.value * 0.16,
+  }));
   const loading = isAdding || busyAction === "reconcile";
 
   return (
     <PaperSurface palette={palette}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
-        <View style={styles.screen}>
-          <View style={styles.topBar}>
-            <Pressable
-              accessibilityLabel="Abrir biblioteca"
-              accessibilityRole="button"
-              onPress={openDrawer}
-              style={({ pressed }) => [styles.circleButton, { borderColor: palette.line, opacity: pressed ? 0.68 : 1 }]}
-            >
-              <BookIcon color={palette.accent} />
-            </Pressable>
-            <Text style={[styles.brand, { color: palette.ink }]}>sensus</Text>
-            <View style={styles.themeSelector}>
-              <ThemeSelector isDark={isDark} onChange={setThemeMode} palette={palette} value={themeMode} />
-            </View>
-          </View>
+        <GestureDetector gesture={edgeSwipeGesture}>
+          <View style={styles.surface}>
+            <Animated.View style={[styles.mainLayer, mainLayerStyle]}>
+              <View style={styles.screen}>
+                <View style={styles.topBar}>
+                  <Pressable
+                    accessibilityLabel="Abrir biblioteca"
+                    accessibilityRole="button"
+                    onPress={openDrawer}
+                    style={({ pressed }) => [styles.circleButton, { borderColor: palette.line, opacity: pressed ? 0.68 : 1 }]}
+                  >
+                    <BookIcon color={palette.accent} />
+                  </Pressable>
+                  <Text style={[styles.brand, { color: palette.ink }]}>sensus</Text>
+                  <View style={styles.themeSelector}>
+                    <ThemeSelector isDark={isDark} onChange={setThemeMode} palette={palette} value={themeMode} />
+                  </View>
+                </View>
 
-          <View style={styles.hero}>
-            <Text style={[styles.headline, { color: palette.ink }]}>¿QUÉ PALABRA{`\n`}QUIERES GUARDAR?</Text>
-            <View style={[styles.inputShell, { borderColor: palette.line }]}>
-              <TextInput
-                accessibilityLabel="Escribe una palabra"
-                autoCapitalize="sentences"
-                autoCorrect={false}
-                maxLength={MAX_TERM_LENGTH}
-                onChangeText={(value) => {
-                  setTerm(value.slice(0, MAX_TERM_LENGTH));
-                  setFormError(null);
-                  clearFeedback();
-                }}
-                onFocus={clearFeedback}
-                onSubmitEditing={() => void submit()}
-                placeholder="Escribe una palabra"
-                placeholderTextColor={palette.mutedInk}
-                returnKeyType="go"
-                style={[styles.termInput, { color: palette.ink }]}
-                value={term}
-              />
-              <Pressable
-                accessibilityLabel="Guardar palabra"
-                accessibilityRole="button"
-                accessibilityState={{ busy: loading, disabled: loading }}
-                disabled={loading}
-                onPress={() => void submit()}
-                style={({ pressed }) => [styles.submitButton, { borderLeftColor: palette.line, opacity: pressed || loading ? 0.58 : 1 }]}
-              >
-                {loading ? <ActivityIndicator color={palette.accent} /> : <Text style={[styles.submitArrow, { color: palette.accent }]}>→</Text>}
-              </Pressable>
-            </View>
+                <View style={styles.hero}>
+                  <Text style={[styles.headline, { color: palette.ink }]}>¿QUÉ PALABRA{`\n`}QUIERES GUARDAR?</Text>
+                  <View style={[styles.inputShell, { borderColor: palette.line }]}>
+                    <TextInput
+                      accessibilityLabel="Escribe una palabra"
+                      autoCapitalize="sentences"
+                      autoCorrect={false}
+                      maxLength={MAX_TERM_LENGTH}
+                      onChangeText={(value) => {
+                        setTerm(value.slice(0, MAX_TERM_LENGTH));
+                        setFormError(null);
+                        clearFeedback();
+                      }}
+                      onFocus={clearFeedback}
+                      onSubmitEditing={() => void submit()}
+                      placeholder="Escribe una palabra"
+                      placeholderTextColor={palette.mutedInk}
+                      returnKeyType="go"
+                      style={[styles.termInput, { color: palette.ink }]}
+                      value={term}
+                    />
+                    <Pressable
+                      accessibilityLabel="Guardar palabra"
+                      accessibilityRole="button"
+                      accessibilityState={{ busy: loading, disabled: loading }}
+                      disabled={loading}
+                      onPress={() => void submit()}
+                      style={({ pressed }) => [styles.submitButton, { borderLeftColor: palette.line, opacity: pressed || loading ? 0.58 : 1 }]}
+                    >
+                      {loading ? <ActivityIndicator color={palette.accent} /> : <Text style={[styles.submitArrow, { color: palette.accent }]}>→</Text>}
+                    </Pressable>
+                  </View>
 
-            {errorMessage || noticeMessage || formError ? (
-              <Feedback error={errorMessage ?? formError} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
-            ) : null}
-          </View>
-        </View>
-
-        <Pressable
-          accessibilityLabel="Cerrar biblioteca"
-          accessibilityRole="button"
-          onPress={closeDrawer}
-          pointerEvents={isDrawerOpen ? "auto" : "none"}
-          style={[styles.backdrop, { backgroundColor: palette.ink, opacity: isDrawerOpen ? 0.16 : 0 }]}
-        />
-
-        <Animated.View
-          style={[
-            styles.drawer,
-            { backgroundColor: palette.paperRaised, borderColor: palette.line, height: drawerHeight },
-            { transform: [{ translateY }] },
-          ]}
-        >
-          <View {...panResponder.panHandlers} style={styles.drawerHandleZone}>
-            <View style={[styles.drawerHandle, { backgroundColor: palette.line }]} />
-            <View style={styles.drawerTitleRow}>
-              <View style={styles.drawerTitleGroup}>
-                <BookIcon color={palette.accent} />
-                <Text style={[styles.drawerTitle, { color: palette.ink }]}>Biblioteca</Text>
+                  {errorMessage || noticeMessage || formError ? (
+                    <Feedback error={errorMessage ?? formError} notice={noticeMessage} onDismiss={clearFeedback} palette={palette} />
+                  ) : null}
+                </View>
               </View>
-              <Pressable accessibilityLabel="Cerrar biblioteca" accessibilityRole="button" hitSlop={10} onPress={closeDrawer} style={styles.closeButton}>
-                <Text style={[styles.closeText, { color: palette.ink }]}>×</Text>
-              </Pressable>
-            </View>
-          </View>
+            </Animated.View>
 
-          <View style={styles.drawerToolbar}>
-            <Text style={[styles.drawerDescription, { color: palette.mutedInk }]}>Tus palabras, listas para volver.</Text>
-          </View>
+            <Animated.View pointerEvents={isDrawerOpen ? "auto" : "none"} style={[styles.backdrop, { backgroundColor: palette.ink }, backdropStyle]}>
+              <Pressable accessibilityLabel="Cerrar biblioteca" accessibilityRole="button" onPress={closeDrawer} style={styles.backdropPressable} />
+            </Animated.View>
 
-          <View style={styles.drawerBody}>
-            <LibraryContent embedded onClose={closeDrawer} />
-          </View>
-        </Animated.View>
+            <Animated.View
+              pointerEvents={isDrawerOpen ? "auto" : "none"}
+              style={[styles.drawer, { backgroundColor: palette.paperRaised, borderColor: palette.line, width }, drawerStyle]}
+            >
+              <LibraryContent embedded onClose={closeDrawer} />
+            </Animated.View>
 
+          </View>
+        </GestureDetector>
       </KeyboardAvoidingView>
     </PaperSurface>
   );
@@ -211,6 +221,8 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  surface: { flex: 1, overflow: "hidden" },
+  mainLayer: { flex: 1 },
   screen: { flex: 1, paddingHorizontal: 26 },
   topBar: { minHeight: 84, alignItems: "center", justifyContent: "center", position: "relative" },
   brand: { fontSize: 18, fontWeight: "500", letterSpacing: 2.2 },
@@ -223,17 +235,8 @@ const styles = StyleSheet.create({
   submitButton: { width: 69, minHeight: 68, alignItems: "center", justifyContent: "center", borderLeftWidth: 1 },
   submitArrow: { fontSize: 34, lineHeight: 36, fontWeight: "300", marginTop: -3 },
   backdrop: { ...StyleSheet.absoluteFill },
-  drawer: { position: "absolute", left: 0, right: 0, bottom: 0, borderTopWidth: 1, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: "hidden" },
-  drawerHandleZone: { paddingTop: 13, paddingHorizontal: 24 },
-  drawerHandle: { alignSelf: "center", width: 38, height: 5, borderRadius: 99 },
-  drawerTitleRow: { minHeight: 59, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  drawerTitleGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
-  drawerTitle: { fontFamily: "Iowan Old Style", fontSize: 25, fontWeight: "700" },
-  closeButton: { width: 34, height: 34, alignItems: "center", justifyContent: "center" },
-  closeText: { fontFamily: "Iowan Old Style", fontSize: 29, lineHeight: 30, fontWeight: "300" },
-  drawerToolbar: { paddingHorizontal: 24, paddingBottom: 14, gap: 13 },
-  drawerDescription: { fontSize: 13, lineHeight: 18 },
-  drawerBody: { flex: 1 },
+  backdropPressable: { ...StyleSheet.absoluteFill },
+  drawer: { position: "absolute", top: 0, right: 0, bottom: 0, borderLeftWidth: 1, borderTopLeftRadius: 28, borderBottomLeftRadius: 28, overflow: "hidden" },
   bookIcon: { width: 29, height: 23, flexDirection: "row", position: "relative" },
   bookPage: { width: 14, height: 21, position: "absolute", top: 1, borderWidth: 1.7 },
   bookPageLeft: { left: 0, borderTopLeftRadius: 7, borderBottomLeftRadius: 2, borderRightWidth: 0 },
