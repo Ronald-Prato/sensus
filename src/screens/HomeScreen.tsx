@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -17,8 +17,9 @@ import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming
 
 import { Feedback, PaperSurface, ThemeSelector } from "../components/Primitives";
 import { useSensus } from "../context/SensusProvider";
-import { MAX_TERM_LENGTH } from "../lib/sensus";
+import { MAX_TERM_LENGTH, normalizeTermKey } from "../lib/sensus";
 import { normalizeTerm, validateTerm } from "../lib/validation";
+import type { AppPalette } from "../theme";
 import { LibraryContent } from "./LibraryScreen";
 
 const EDGE_SWIPE_WIDTH = 34;
@@ -32,23 +33,87 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function BookIcon({ color }: { color: string }) {
+function LibraryIcon({ color }: { color: string }) {
   return (
-    <View accessibilityElementsHidden style={styles.bookIcon}>
-      <View style={[styles.bookPage, styles.bookPageLeft, { borderColor: color }]} />
-      <View style={[styles.bookPage, styles.bookPageRight, { borderColor: color }]} />
-      <View style={[styles.bookSpine, { backgroundColor: color }]} />
+    <View accessibilityElementsHidden style={styles.libraryIcon}>
+      <View style={[styles.libraryBook, styles.libraryBookShort, { borderColor: color }]} />
+      <View style={[styles.libraryBook, styles.libraryBookTall, { borderColor: color }]} />
+      <View style={[styles.libraryBook, styles.libraryBookMedium, { borderColor: color }]} />
+      <View style={[styles.libraryBase, { backgroundColor: color }]} />
     </View>
+  );
+}
+
+function WordProcessingToast({ term, palette, onPress, onDismiss }: { term: string; palette: AppPalette; onPress: () => void; onDismiss: () => void }) {
+  const translateY = useSharedValue(140);
+  const dismissStarted = useRef(false);
+
+  useEffect(() => {
+    dismissStarted.current = false;
+    translateY.value = 140;
+    translateY.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
+  }, [term, translateY]);
+
+  const dismiss = () => {
+    if (dismissStarted.current) return;
+    dismissStarted.current = true;
+    translateY.value = withTiming(140, { duration: 210, easing: Easing.in(Easing.cubic) }, (finished) => {
+      if (finished) runOnJS(onDismiss)();
+    });
+  };
+
+  const swipeDownGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetY(12)
+        .failOffsetX([-28, 28])
+        .onUpdate((event) => {
+          translateY.value = Math.max(0, event.translationY);
+        })
+        .onEnd((event) => {
+          if (event.translationY > 70 || event.velocityY > 900) {
+            runOnJS(dismiss)();
+            return;
+          }
+          translateY.value = withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) });
+        }),
+    [dismiss, translateY],
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+
+  return (
+    <GestureDetector gesture={swipeDownGesture}>
+      <Animated.View style={[styles.toastLayer, animatedStyle]}>
+        <Pressable
+          accessibilityLabel={`${term}. Buscando definición. Toca para abrir la biblioteca.`}
+          accessibilityRole="button"
+          accessibilityState={{ busy: true }}
+          onPress={() => {
+            dismiss();
+            onPress();
+          }}
+          style={({ pressed }) => [styles.processingToast, { backgroundColor: palette.paperRaised, borderColor: palette.line, opacity: pressed ? 0.82 : 1 }]}
+        >
+          <View style={styles.toastCopy}>
+            <Text numberOfLines={1} style={[styles.toastTerm, { color: palette.ink }]}>{term}</Text>
+            <Text style={[styles.toastSubtitle, { color: palette.mutedInk }]}>Buscando definición</Text>
+          </View>
+          <ActivityIndicator color={palette.accent} size="small" />
+        </Pressable>
+      </Animated.View>
+    </GestureDetector>
   );
 }
 
 export function HomeScreen() {
   const { width } = useWindowDimensions();
-  const { palette, themeMode, isDark, setThemeMode, busyAction, errorMessage, noticeMessage, clearFeedback, addWord } = useSensus();
+  const { snapshot, palette, themeMode, isDark, setThemeMode, busyAction, errorMessage, noticeMessage, clearFeedback, addWord } = useSensus();
   const [term, setTerm] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [processingToast, setProcessingToast] = useState<{ entryId: string; term: string } | null>(null);
   const drawerProgress = useSharedValue(0);
   const gestureStartProgress = useSharedValue(0);
   const gestureActive = useSharedValue(0);
@@ -108,14 +173,25 @@ export function HomeScreen() {
 
     setFormError(null);
     setIsAdding(true);
-    const result = await addWord(normalizeTerm(term));
+    const normalizedTerm = normalizeTerm(term);
+    const existingEntry = snapshot.entries.find((entry) => normalizeTermKey(entry.term) === normalizeTermKey(normalizedTerm));
+    const result = await addWord(normalizedTerm);
     setIsAdding(false);
     if (result.ok) {
       setTerm("");
+      if (!existingEntry && result.entryId) setProcessingToast({ entryId: result.entryId, term: normalizedTerm });
     } else {
       setFormError(result.error);
     }
   };
+
+  useEffect(() => {
+    if (!processingToast) return;
+    const entry = snapshot.entries.find((candidate) => candidate.id === processingToast.entryId);
+    if (!entry || entry.status === "ready" || entry.status === "not-found" || entry.status === "failed") {
+      setProcessingToast(null);
+    }
+  }, [processingToast, snapshot.entries]);
 
   const openDrawer = () => {
     Keyboard.dismiss();
@@ -154,7 +230,7 @@ export function HomeScreen() {
                     onPress={openDrawer}
                     style={({ pressed }) => [styles.circleButton, { borderColor: palette.line, opacity: pressed ? 0.68 : 1 }]}
                   >
-                    <BookIcon color={palette.accent} />
+                    <LibraryIcon color={palette.accent} />
                   </Pressable>
                   <Text style={[styles.brand, { color: palette.ink }]}>sensus</Text>
                   <View style={styles.themeSelector}>
@@ -223,6 +299,15 @@ export function HomeScreen() {
               </View>
             </Animated.View>
 
+            {processingToast ? (
+              <WordProcessingToast
+                onDismiss={() => setProcessingToast(null)}
+                onPress={openDrawer}
+                palette={palette}
+                term={processingToast.term}
+              />
+            ) : null}
+
           </View>
         </GestureDetector>
       </KeyboardAvoidingView>
@@ -250,9 +335,15 @@ const styles = StyleSheet.create({
   drawer: { position: "absolute", top: 0, left: 0, bottom: 0, borderRightWidth: 1, overflow: "hidden" },
   drawerTexture: { ...StyleSheet.absoluteFill },
   drawerContent: { flex: 1 },
-  bookIcon: { width: 29, height: 23, flexDirection: "row", position: "relative" },
-  bookPage: { width: 14, height: 21, position: "absolute", top: 1, borderWidth: 1.7 },
-  bookPageLeft: { left: 0, borderTopLeftRadius: 7, borderBottomLeftRadius: 2, borderRightWidth: 0 },
-  bookPageRight: { right: 0, borderTopRightRadius: 7, borderBottomRightRadius: 2, borderLeftWidth: 0 },
-  bookSpine: { position: "absolute", left: 13.5, top: 1, width: 1.5, height: 21 },
+  toastLayer: { position: "absolute", left: 20, right: 20, bottom: 18, zIndex: 30, elevation: 30 },
+  processingToast: { minHeight: 70, borderWidth: 1, borderRadius: 18, paddingHorizontal: 16, paddingVertical: 13, flexDirection: "row", alignItems: "center", gap: 13, shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.14, shadowRadius: 14 },
+  toastCopy: { flex: 1, gap: 2 },
+  toastTerm: { fontSize: 16, lineHeight: 21, fontWeight: "700" },
+  toastSubtitle: { fontSize: 13, lineHeight: 18 },
+  libraryIcon: { width: 27, height: 24, flexDirection: "row", alignItems: "flex-end", justifyContent: "center", gap: 3, position: "relative", paddingBottom: 3 },
+  libraryBook: { width: 6, borderWidth: 1.7, borderRadius: 2 },
+  libraryBookShort: { height: 16 },
+  libraryBookTall: { height: 21 },
+  libraryBookMedium: { height: 18 },
+  libraryBase: { position: "absolute", left: 1, right: 1, bottom: 0, height: 1.7, borderRadius: 99 },
 });
