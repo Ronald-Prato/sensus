@@ -10,11 +10,16 @@ body,
   background-color: #f7f3ec;
 }
 
+body,
+#root {
+  min-height: 100dvh;
+}
+
 html,
 body {
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  background-position: top left;
+  background-repeat: repeat;
+  background-size: 512px 512px;
 }
 
 @media (prefers-color-scheme: dark) {

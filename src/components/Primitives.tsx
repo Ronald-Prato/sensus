@@ -16,17 +16,22 @@ export function PaperSurface({ children, palette }: { children: ReactNode; palet
         : null;
     if (!textureUrl) return;
     const backgroundImage = `url("${textureUrl}")`;
-    document.documentElement.style.backgroundColor = palette.paper;
-    document.documentElement.style.backgroundImage = backgroundImage;
-    document.body.style.backgroundColor = palette.paper;
-    document.body.style.backgroundImage = backgroundImage;
+    const root = document.getElementById("root");
+    for (const element of [document.documentElement, document.body, root]) {
+      if (!element) continue;
+      element.style.backgroundColor = palette.paper;
+      element.style.backgroundImage = backgroundImage;
+      element.style.backgroundPosition = "top left";
+      element.style.backgroundRepeat = "repeat";
+      element.style.backgroundSize = "512px 512px";
+    }
   }, [palette.paper, palette.textureImage]);
 
   return (
     <ImageBackground
       accessibilityIgnoresInvertColors
       imageStyle={[styles.textureImage, { opacity: palette.textureOpacity }]}
-      resizeMode="cover"
+      resizeMode="repeat"
       source={palette.textureImage}
       style={[styles.paper, { backgroundColor: palette.paper }]}
     >
@@ -38,7 +43,7 @@ export function PaperSurface({ children, palette }: { children: ReactNode; palet
       <View pointerEvents="none" style={styles.textureOverlay}>
         <Image
           accessibilityIgnoresInvertColors
-          resizeMode="cover"
+          resizeMode="repeat"
           source={palette.textureImage}
           style={[StyleSheet.absoluteFill, { opacity: Math.min(palette.textureOpacity * 0.34, 0.22) }]}
         />

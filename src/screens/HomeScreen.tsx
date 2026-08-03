@@ -112,6 +112,7 @@ export function HomeScreen() {
   const [term, setTerm] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [isTermFocused, setIsTermFocused] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [processingToast, setProcessingToast] = useState<{ entryId: string; term: string } | null>(null);
   const drawerProgress = useSharedValue(0);
@@ -238,7 +239,7 @@ export function HomeScreen() {
                   </View>
                 </View>
 
-                <View style={styles.hero}>
+                <View style={[styles.hero, isTermFocused && width <= 600 ? styles.heroWithKeyboard : undefined]}>
                   <Text style={[styles.headline, { color: palette.ink }]}>¿QUÉ PALABRA{`\n`}QUIERES GUARDAR?</Text>
                   <View style={[styles.inputShell, { borderColor: palette.line }]}>
                     <TextInput
@@ -251,7 +252,11 @@ export function HomeScreen() {
                         setFormError(null);
                         clearFeedback();
                       }}
-                      onFocus={clearFeedback}
+                      onBlur={() => setIsTermFocused(false)}
+                      onFocus={() => {
+                        setIsTermFocused(true);
+                        clearFeedback();
+                      }}
                       onSubmitEditing={() => void submit()}
                       placeholder="Escribe una palabra"
                       placeholderTextColor={palette.mutedInk}
@@ -289,7 +294,7 @@ export function HomeScreen() {
               <View pointerEvents="none" style={styles.drawerTexture}>
                 <Image
                   accessibilityIgnoresInvertColors
-                  resizeMode="cover"
+                  resizeMode="repeat"
                   source={palette.textureImage}
                   style={[StyleSheet.absoluteFill, { opacity: palette.textureOpacity }]}
                 />
@@ -325,6 +330,7 @@ const styles = StyleSheet.create({
   circleButton: { position: "absolute", left: 0, width: 42, height: 42, borderWidth: 1, borderRadius: 99, alignItems: "center", justifyContent: "center" },
   themeSelector: { position: "absolute", right: 0 },
   hero: { flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 120 },
+  heroWithKeyboard: { justifyContent: "flex-start", paddingTop: 54, paddingBottom: 20 },
   headline: { fontFamily: "Iowan Old Style", fontSize: 36, lineHeight: 43, fontWeight: "400", letterSpacing: 0.35, textAlign: "center" },
   inputShell: { width: "100%", minHeight: 70, borderWidth: 1, borderRadius: 23, flexDirection: "row", alignItems: "center", marginTop: 31, overflow: "hidden" },
   termInput: { flex: 1, minHeight: 68, paddingHorizontal: 22, paddingVertical: 0, fontSize: 17 },
